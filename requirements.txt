@@ -1,0 +1,8 @@
+ragas
+datasets
+langchain-google-genai
+langchain-groq
+langchain-ollama
+python-dotenv
+pandas
+scipy
