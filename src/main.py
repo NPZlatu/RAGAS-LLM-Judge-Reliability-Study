@@ -6,9 +6,7 @@ import os
 import ast
 import time
 import pandas as pd
-from ragas import evaluate
 from ragas.metrics.collections import Faithfulness
-from ragas import EvaluationDataset, SingleTurnSample
 
 from judges import get_all_judges
 
@@ -18,13 +16,13 @@ POC_N = 5  # Proof of concept sample size
 
 
 def load_variant(variant_name, n=None):
-    """Load a variant CSV and return as list of SingleTurnSample."""
+    """Load a variant CSV and return as list of dicts for batch_score."""
     path = os.path.join(DATA_DIR, f"{variant_name}.csv")
     df = pd.read_csv(path)
     if n:
         df = df.head(n)
 
-    samples = []
+    inputs = []
     for _, row in df.iterrows():
         # Parse contexts back from string representation
         contexts = row["contexts"]
@@ -34,38 +32,50 @@ def load_variant(variant_name, n=None):
             except (ValueError, SyntaxError):
                 contexts = [contexts]
 
-        sample = SingleTurnSample(
-            user_input=row["question"],
-            retrieved_contexts=contexts,
-            response=str(row["answer"]),
-            reference=str(row.get("ground_truth", row["answer"])),
-        )
-        samples.append(sample)
+        inputs.append({
+            "user_input": row["question"],
+            "retrieved_contexts": contexts,
+            "response": str(row["answer"]),
+        })
 
-    return EvaluationDataset(samples=samples)
+    return inputs
 
 
-def run_evaluation(judge_name, judge_llm, dataset):
-    """Run Faithfulness evaluation with a single judge. Returns results DataFrame."""
+RATE_LIMIT_DELAY = 15  # seconds between calls for free-tier rate limits
+
+
+def run_evaluation(judge_name, judge_llm, inputs):
+    """Run Faithfulness evaluation with a single judge, one sample at a time.
+
+    Sequential scoring avoids hitting free-tier rate limits (e.g. Gemini 5 req/min)
+    and gives per-sample error isolation.
+    """
     print(f"\n  Running Faithfulness with {judge_name}...")
     metric = Faithfulness(llm=judge_llm)
+    scores = []
 
-    try:
-        result = evaluate(
-            dataset=dataset,
-            metrics=[metric],
-        )
-        result_df = result.to_pandas()
-        result_df["judge"] = judge_name
-        return result_df
-    except Exception as e:
-        print(f"  [ERROR] {judge_name}: {e}")
-        # Return DataFrame with NaN scores
-        return pd.DataFrame({
-            "judge": [judge_name] * len(dataset),
-            "user_input": [s.user_input for s in dataset.samples],
-            "faithfulness": [float("nan")] * len(dataset),
-        })
+    for i, inp in enumerate(inputs):
+        try:
+            result = metric.score(
+                user_input=inp["user_input"],
+                response=inp["response"],
+                retrieved_contexts=inp["retrieved_contexts"],
+            )
+            scores.append(result.value)
+            print(f"    [{i+1}/{len(inputs)}] score={result.value:.2f}")
+        except Exception as e:
+            scores.append(float("nan"))
+            print(f"    [{i+1}/{len(inputs)}] ERROR: {e}")
+
+        # Delay between calls to stay under free-tier rate limits
+        if i < len(inputs) - 1:
+            time.sleep(RATE_LIMIT_DELAY)
+
+    return pd.DataFrame({
+        "judge": [judge_name] * len(inputs),
+        "user_input": [inp["user_input"] for inp in inputs],
+        "faithfulness": scores,
+    })
 
 
 def main():
@@ -76,8 +86,8 @@ def main():
 
     # Step 1: Load data
     print("\n[1] Loading Variant A...")
-    dataset = load_variant("A", n=POC_N)
-    print(f"    Loaded {len(dataset)} samples")
+    inputs = load_variant("A", n=POC_N)
+    print(f"    Loaded {len(inputs)} samples")
 
     # Step 2: Initialize judges
     print("\n[2] Initializing judges...")
@@ -93,7 +103,7 @@ def main():
 
     for judge_name, judge_llm in judges.items():
         start = time.time()
-        result_df = run_evaluation(judge_name, judge_llm, dataset)
+        result_df = run_evaluation(judge_name, judge_llm, inputs)
         elapsed = time.time() - start
         print(f"      {judge_name} completed in {elapsed:.1f}s")
         all_results.append(result_df)
@@ -110,11 +120,8 @@ def main():
     print("\n" + "=" * 60)
     print("SUMMARY")
     print("=" * 60)
-    if "faithfulness" in combined.columns:
-        summary = combined.groupby("judge")["faithfulness"].agg(["mean", "std", "count"])
-        print(summary.to_string())
-    else:
-        print(combined.to_string())
+    summary = combined.groupby("judge")["faithfulness"].agg(["mean", "std", "count"])
+    print(summary.to_string())
 
     print(f"\nTotal rows: {len(combined)}")
 

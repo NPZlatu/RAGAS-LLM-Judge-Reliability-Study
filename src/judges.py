@@ -1,37 +1,49 @@
 """
 LLM Judge initialization for RAGAS evaluation.
 Phase 1: Gemini 2.5 Flash (Google) and Llama 3.1 8B (Groq).
+
+Both judges use AsyncOpenAI pointed at provider-specific OpenAI-compatible
+endpoints, because RAGAS 0.4.3 collections metrics require async LLM clients
+(batch_score → abatch_score → ascore → agenerate).
 """
 
 import os
 from dotenv import load_dotenv
-from ragas.llms import LangchainLLMWrapper
+from openai import AsyncOpenAI
+from ragas.llms import llm_factory
 
 load_dotenv()
 
 
 def init_gemini_judge():
-    """Judge 1: Gemini 2.5 Flash via Google AI free tier."""
+    """Judge 1: Gemini 2.5 Flash via Google AI OpenAI-compatible endpoint."""
     api_key = os.getenv("GOOGLE_API_KEY")
     if not api_key:
         raise EnvironmentError("GOOGLE_API_KEY not set in .env")
 
-    from langchain_google_genai import ChatGoogleGenerativeAI
-
-    llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0)
-    return LangchainLLMWrapper(llm)
+    client = AsyncOpenAI(
+        api_key=api_key,
+        base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+    )
+    # Gemini 2.5 Flash is a "thinking" model — thinking tokens count against
+    # max_tokens, so we need a large budget (default 1024 gets exhausted by ~980
+    # thinking tokens, truncating the actual output).
+    return llm_factory(
+        "gemini-2.5-flash", provider="openai", client=client, max_tokens=8192,
+    )
 
 
 def init_groq_judge():
-    """Judge 2: Llama 3.1 8B Instant via Groq free tier."""
+    """Judge 2: Llama 3.1 8B Instant via Groq OpenAI-compatible endpoint."""
     api_key = os.getenv("GROQ_API_KEY")
     if not api_key:
         raise EnvironmentError("GROQ_API_KEY not set in .env")
 
-    from langchain_groq import ChatGroq
-
-    llm = ChatGroq(model="llama-3.1-8b-instant", temperature=0)
-    return LangchainLLMWrapper(llm)
+    client = AsyncOpenAI(
+        api_key=api_key,
+        base_url="https://api.groq.com/openai/v1",
+    )
+    return llm_factory("llama-3.1-8b-instant", provider="openai", client=client)
 
 
 def get_all_judges():

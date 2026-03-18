@@ -26,3 +26,5 @@ Thumbs.db
 
 # Project
 .claude/
+data/variants/*.csv
+results/*.csv
