@@ -1,0 +1,10 @@
+judge,metric,variant_a_gold,variant_b_hallucination,variant_c_poor,variant_d_noisy
+gemini-2.5-flash-lite,faithfulness,0.974,0.449,0.444,1.000
+gemini-2.5-flash-lite,answer_relevancy,0.876,0.847,0.648,0.876
+gemini-2.5-flash-lite,answer_correctness,1.000,0.431,0.293,1.000
+gpt-4o-mini,faithfulness,0.980,0.431,0.444,0.997
+gpt-4o-mini,answer_relevancy,0.862,0.839,0.586,0.861
+gpt-4o-mini,answer_correctness,1.000,0.498,0.393,1.000
+llama-3.1-8b,faithfulness,0.872,0.306,0.348,0.866
+llama-3.1-8b,answer_relevancy,0.825,0.826,0.571,0.825
+llama-3.1-8b,answer_correctness,0.990,0.565,0.443,0.990

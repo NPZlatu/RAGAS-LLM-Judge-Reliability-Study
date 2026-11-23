@@ -1,0 +1,4 @@
+metric,mean_spearman_rho
+faithfulness,0.816
+answer_correctness,0.893
+answer_relevancy,0.594

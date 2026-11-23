@@ -1,0 +1,4 @@
+metric,gemini_vs_gpt,gemini_vs_llama,gpt_vs_llama
+faithfulness,0.070,0.169,0.170
+answer_relevancy,0.080,0.096,0.066
+answer_correctness,0.051,0.093,0.080

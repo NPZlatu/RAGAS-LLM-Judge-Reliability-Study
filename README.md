@@ -78,10 +78,11 @@ src/
   data_prep.py   Builds the four dataset variants from WikiEval
   judges.py      Sets up the judge clients
   main.py        Runs the evaluation
+results/summary/  Summary tables from the final report (mean scores, pairwise MAE, Spearman)
 RESEARCH_PLAN.md Method and architecture notes
 ```
 
-This repository currently holds the pipeline from the first phase of the project. The full tournament run, the analysis script and the raw scores are being added.
+This repository currently holds the pipeline from the first phase of the project and the summary tables from the final report. The full tournament run, the analysis script and the raw per-row scores are still to be added.
 
 ```bash
 python -m venv .venv && source .venv/bin/activate
